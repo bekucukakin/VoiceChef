@@ -1,0 +1,174 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceChef</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md py-4">
+        <div class="container mx-auto flex justify-between items-center px-6">
+            <a href="#" class="text-2xl font-bold text-orange-500">VoiceChef</a>
+            <ul class="flex space-x-6">
+                <li><a href="/index" class="text-gray-700 hover:text-orange-500">Home</a></li>
+                <li><a href="#about" class="text-gray-700 hover:text-orange-500">About</a></li>
+                <li><a href="#contact" class="text-gray-700 hover:text-orange-500">Contact</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="bg-orange-100 py-20 text-center">
+        <h1 class="text-4xl font-bold text-gray-800">Find Recipes with Your Voice</h1>
+        <p class="mt-4 text-lg text-gray-600">Speak your ingredients and let us find the perfect recipe for you!</p>
+        <button onclick="startListening()" class="mt-6 bg-orange-500 text-white py-2 px-6 rounded hover:bg-orange-600 transition">
+            Start Speaking
+        </button>
+    </header>
+
+    <!-- Recipes Section -->
+    <main class="container mx-auto px-6 py-12">
+        <h2 class="text-3xl font-bold text-gray-800 mb-6">Recipes</h2>
+        <div id="recipes-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <!-- Recipe cards will be dynamically inserted here -->
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 py-6">
+        <div class="container mx-auto text-center">
+            <p>&copy; 2024 VoiceChef. All rights reserved.</p>
+        </div>
+    </footer>
+
+        <!-- Recipes Container -->
+        <div id="recipes-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"></div>
+    </div>
+
+<script>
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = navigator.language || "en-US";
+
+    let synth = window.speechSynthesis;
+    let currentUtterance = null;
+    let isPaused = false;
+
+    // Start listening for ingredients
+    function startListening() {
+        recognition.start();
+    }
+
+    // Speak steps function
+    function speakSteps(steps, buttons) {
+        let currentIndex = 0;
+
+        function speakStep() {
+            if (currentIndex < steps.length && !isPaused) {
+                currentUtterance = new SpeechSynthesisUtterance(steps[currentIndex]);
+                currentUtterance.lang = navigator.language || "en-US";
+
+                synth.speak(currentUtterance);
+
+                currentUtterance.onend = () => {
+                    currentIndex++;
+                    if (currentIndex < steps.length && !isPaused) {
+                        speakStep();
+                    }
+                };
+            }
+        }
+
+        speakStep();
+
+        buttons.pauseButton.onclick = () => {
+            isPaused = true;
+            synth.cancel();
+        };
+
+        buttons.resumeButton.onclick = () => {
+            if (isPaused) {
+                isPaused = false;
+                speakStep();
+            }
+        };
+    }
+  
+  
+    // Display recipes in cards
+    function displayRecipes(recipes) {
+        const container = document.getElementById('recipes-container');
+        container.innerHTML = '';
+
+        if (recipes.length === 0) {
+            container.innerHTML = '<div class="no-recipes">No recipes found for the given ingredients.</div>';
+            return;
+        }
+
+        // Add a flex container to the parent to arrange cards in a responsive grid
+        container.classList.add('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'gap-6', 'px-4', 'py-8');
+
+        recipes.forEach(recipe => {
+            const card = document.createElement('div');
+            card.classList.add('bg-white', 'shadow-md', 'rounded-lg', 'p-6', 'h-full', 'flex', 'flex-col', 'justify-between', 
+                               'transition-transform', 'transform', 'hover:scale-105', 'hover:shadow-lg', 'hover:z-10', 'duration-300'); // Hover effect
+
+            const pauseButton = document.createElement('button');
+            pauseButton.textContent = 'Pause';
+            pauseButton.classList.add('hidden', 'bg-gradient-to-r', 'from-orange-400', 'to-pink-500', 'text-white', 'py-1', 'px-3', 'rounded', 'hover:opacity-90', 'transition');
+
+            const resumeButton = document.createElement('button');
+            resumeButton.textContent = 'Resume';
+            resumeButton.classList.add('hidden', 'bg-gradient-to-r', 'from-orange-400', 'to-pink-500', 'text-white', 'py-1', 'px-3', 'rounded', 'hover:opacity-90', 'transition');
+
+            card.innerHTML = `
+                <h2 class="text-lg font-bold mb-2">${recipe.name}</h2>
+                <p class="text-sm"><strong>Matched Ingredients:</strong> ${recipe.matched_ingredients.join(', ')}</p>
+                <p class="text-sm"><strong>Missing Ingredients:</strong> ${recipe.missing_ingredients.join(', ')}</p>
+                <p class="text-sm mb-2"><strong>Instructions:</strong> ${recipe.instructions}</p>
+                <ul class="text-sm list-none ml-4 mb-4">
+                  ${recipe.steps.map(step => `<li>${step}</li>`).join('')}
+                </ul>
+                <div class="flex justify-between items-center">
+                  <button class="bg-gradient-to-r from-orange-400 to-pink-500 text-white py-1 px-3 rounded hover:opacity-90 transition speak-btn" data-steps='${JSON.stringify(recipe.steps)}'>Listen to Step</button>
+                </div>
+            `;
+
+            const buttonGroup = card.querySelector('.flex');
+            buttonGroup.appendChild(pauseButton);
+            buttonGroup.appendChild(resumeButton);
+
+            container.appendChild(card);
+
+            const speakButton = card.querySelector('.speak-btn');
+            speakButton.addEventListener('click', function () {
+                pauseButton.classList.remove('hidden');
+                resumeButton.classList.remove('hidden');
+                speakSteps(JSON.parse(this.getAttribute('data-steps')), {
+                    pauseButton,
+                    resumeButton
+                });
+            });
+        });
+    }
+
+    // Fetch recipes from the backend
+    recognition.onresult = function (event) {
+        const ingredients = event.results[0][0].transcript.toLowerCase().split(' ').join(', ');
+        console.log("Ingredients sent to backend:", ingredients);
+
+        fetch(`http://127.0.0.1:5000/get-recipe?ingredients=${ingredients}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayRecipes(data.recipes);
+                } else {
+                    displayRecipes([]);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching recipes:', error);
+                alert('Error fetching recipes');
+            });
+    };
+</script>
