@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from functools import wraps
 import spacy
+import bcrypt
 
 app = Flask(__name__)
 CORS(app)
@@ -23,11 +24,13 @@ def get_db_connection():
     )
 
 @app.route('/index')
+@login_required
 def index():
     return render_template('index.html')
 
 
 @app.route('/get-recipe', methods=['GET'])
+@login_required
 def get_recipe():
     try:
         ingredients_input = request.args.get('ingredients', '').lower()
@@ -82,7 +85,87 @@ def get_recipe():
             return jsonify({"success": False, "message": "No recipes found"}), 404
     except Exception as e:
         return jsonify({"success": False, "message": f"An error occurred: {str(e)}"}), 500
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
 
+
+@app.route('/')
+def home():
+    return redirect(url_for('login_page'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    if request.method == 'GET':
+        return render_template('login.html')
+
+    elif request.method == 'POST':
+        try:
+            email = request.form.get('email')
+            password = request.form.get('password')
+
+            if not email or not password:
+                return jsonify({"success": False, "message": "Email and password are required"}), 400
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+            user = cursor.fetchone()
+
+            if user and bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+                session['user_id'] = user['id']  # Oturumu başlatıyoruz
+                return redirect(url_for('index'))
+            else:
+                return jsonify({"success": False, "message": "Invalid credentials"}), 401
+        except Exception as e:
+            return jsonify({"success": False, "message": f"An error occurred: {str(e)}"}), 500
+       
+@app.route('/logout_user')
+def logout_user():
+    
+    session.pop('user_id', None)
+    return redirect(url_for('login_page'))  
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup_page():
+    if request.method == 'GET':
+        return render_template('signup.html')  
+
+    elif request.method == 'POST':
+        try:
+           
+            email = request.form.get('email')
+            username = request.form.get('username')
+            password = request.form.get('password')
+
+            
+            if not email or not username or not password:
+                return "All fields are required", 400
+
+            
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO users (email, username, password) VALUES (%s, %s, %s)",
+                (email, username, hashed_password.decode('utf-8'))
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            
+            return redirect(url_for('login_page'))
+
+        except Exception as e:
+            return f"An error occurred: {str(e)}", 500
 
 if __name__ == "__main__":
     app.run(debug=True)
