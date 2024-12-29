@@ -22,6 +22,13 @@ def get_db_connection():
         password="secure_password",
         cursor_factory=DictCursor
     )
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.route('/index')
 @login_required
